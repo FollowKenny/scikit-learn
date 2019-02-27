@@ -828,3 +828,4 @@ def test_warm_start_multitask_lasso():
     clf2 = MultiTaskLasso(alpha=0.1, max_iter=10)
     ignore_warnings(clf2.fit)(X, Y)
     assert_array_almost_equal(clf2.coef_, clf.coef_)
+    assert(False)

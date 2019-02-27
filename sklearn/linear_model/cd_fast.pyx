@@ -6,6 +6,8 @@
 #
 # License: BSD 3 clause
 
+from joblib import hash
+
 from libc.math cimport fabs
 cimport numpy as np
 import numpy as np
@@ -17,7 +19,7 @@ from cython cimport floating
 import warnings
 
 from ..utils._cython_blas cimport (_axpy, _dot, _asum, _ger, _gemv, _nrm2, 
-                                   _copy, _scal)
+                                   _copy, _scal, _gemm)
 from ..utils._cython_blas cimport RowMajor, ColMajor, Trans, NoTrans
 
 
@@ -667,6 +669,7 @@ def enet_coordinate_descent_multi_task(floating[::1, :] W, floating l1_reg,
     cdef floating* X_ptr = &X[0, 0]
     cdef floating* W_ptr = &W[0, 0]
     cdef floating* Y_ptr = &Y[0, 0]
+    cdef floating* R_ptr = &R[0, 0]
     cdef floating* wii_ptr = &w_ii[0]
 
     if l1_reg == 0:
@@ -676,15 +679,39 @@ def enet_coordinate_descent_multi_task(floating[::1, :] W, floating l1_reg,
     with nogil:
         # norm_cols_X = (np.asarray(X) ** 2).sum(axis=0)
         for ii in range(n_features):
+            #norm_cols_X[ii] += _nrm2(n_samples, &X[0,ii], 1) ** 2
             for jj in range(n_samples):
                 norm_cols_X[ii] += X[jj, ii] ** 2
 
         # R = Y - np.dot(X, W.T)
+        with gil:
+            print(hash(np.asarray(norm_cols_X)))
+            print(hash(np.asarray(R)))
+            print(hash(np.asarray(X)))
+            print(hash(np.asarray(W)))
+            print(hash(np.asarray(Y)))
+        #_copy(n_samples * n_tasks, Y_ptr, 1, R_ptr, 1)
+        #_gemm(RowMajor, NoTrans, Trans, n_tasks, n_samples, n_features, -1.0,
+        #      W_ptr, n_features, X_ptr, n_features, 1.0, R_ptr, n_samples)
+        #_gemm(ColMajor, NoTrans, Trans, n_samples, n_tasks, n_features, -1.0,
+        #      X_ptr, n_samples, W_ptr, n_tasks, 1.0, R_ptr, n_samples)
+        
         for ii in range(n_samples):
             for jj in range(n_tasks):
                 R[ii, jj] = Y[ii, jj] - (
                     _dot(n_features, X_ptr + ii, n_samples, W_ptr + jj, n_tasks)
                     )
+        with gil:
+            print(hash(np.asarray(Y)))
+            print(hash(np.asarray(R)))
+        #with gil:
+        #    print(hash(np.asarray(norm_cols_X)))
+        #    print(hash(np.asarray(R)))
+        #    print(hash(np.asarray(X)))
+        #    print(hash(np.asarray(W)))
+        #    print(hash(np.asarray(Y)))
+        #    print(n_samples, n_features, n_tasks)
+        
 
         # tol = tol * linalg.norm(Y, ord='fro') ** 2
         tol = tol * _nrm2(n_samples * n_tasks, Y_ptr, 1) ** 2
